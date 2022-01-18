@@ -11,6 +11,7 @@ const PrefixComment = "--"
 const PrefixNameQuery = "name:"
 const PrefixVar = "var:"
 const PrefixVarType = "var_type:"
+const PrefixVarValue = "var_value:"
 const VarTypeDefault = "string"
 
 type QueryCatalog struct {
@@ -37,10 +38,13 @@ func (b QueryCatalog) createParametersQuery(fileScanner *bufio.Scanner) map[stri
 	for fileScanner.Scan() {
 		bufferString := fileScanner.Text()
 		if strings.HasPrefix(bufferString, PrefixComment) {
-			parameterFile := strings.Split(bufferString, ",")
-			nameParam := strings.TrimSpace(strings.Split(parameterFile[0], PrefixVar)[1])
+			nameParam := b.getNameParam(bufferString)
+			if nameParam == "" {
+				continue
+			}
 			parameters[nameParam] = QueryParam{
-				TypeParam: b.getTypeParam(parameterFile),
+				TypeParam: b.getTypeParam(bufferString),
+				Value:     b.getValueInitParam(bufferString),
 			}
 		} else {
 			return parameters
@@ -50,12 +54,29 @@ func (b QueryCatalog) createParametersQuery(fileScanner *bufio.Scanner) map[stri
 
 }
 
-func (b QueryCatalog) getTypeParam(parameterFile []string) string {
-	typeParam := VarTypeDefault
-	if len(parameterFile) > 1 {
-		typeParam = strings.TrimSpace(strings.Split(parameterFile[1], PrefixVarType)[1])
+func (b QueryCatalog) getNameParam(bufferString string) string {
+	if !strings.Contains(bufferString, PrefixVar) {
+		return ""
 	}
-	return typeParam
+	return strings.Split(strings.Split(bufferString, PrefixVar)[1], ",")[0]
+}
+
+func (b QueryCatalog) getValueInitParam(bufferString string) string {
+	if !strings.Contains(bufferString, PrefixVarValue) {
+		return ""
+	}
+	return strings.Split(strings.Split(bufferString, PrefixVarValue)[1], ",")[0]
+}
+
+func (b QueryCatalog) getTypeParam(bufferString string) string {
+	if !strings.Contains(bufferString, PrefixVarType) {
+		return VarTypeDefault
+	}
+	var value = strings.Split(strings.Split(bufferString, PrefixVarType)[1], ",")[0]
+	if value == "" {
+		return VarTypeDefault
+	}
+	return value
 }
 
 func (b QueryCatalog) createQuerys(file string) (map[string]Query, error) {
@@ -90,11 +111,10 @@ func (b QueryCatalog) getQueryValue(fileScanner *bufio.Scanner) string {
 	queryValue := fileScanner.Text()
 	for fileScanner.Scan() {
 		bufferString := fileScanner.Text()
-		if strings.TrimSpace(bufferString) != "" {
-			queryValue = queryValue + " " + bufferString
-		} else {
+		if strings.TrimSpace(bufferString) == "" {
 			return queryValue
 		}
+		queryValue += " " + bufferString
 	}
 	return queryValue
 }
