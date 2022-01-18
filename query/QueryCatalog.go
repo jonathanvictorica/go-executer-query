@@ -73,9 +73,10 @@ func (b QueryCatalog) createQuerys(file string) (map[string]Query, error) {
 			var nameQuery = strings.TrimSpace(strings.Split(bufferString, PrefixNameQuery)[1])
 			var parameters map[string]QueryParam
 			parameters = b.createParametersQuery(fileScanner)
+			queryValue := b.getQueryValue(fileScanner)
 			querys[nameQuery] = Query{
 				Name:       nameQuery,
-				Value:      fileScanner.Text(),
+				Value:      queryValue,
 				Parameters: parameters,
 			}
 		}
@@ -83,4 +84,17 @@ func (b QueryCatalog) createQuerys(file string) (map[string]Query, error) {
 	readFile.Close()
 	return querys, nil
 
+}
+
+func (b QueryCatalog) getQueryValue(fileScanner *bufio.Scanner) string {
+	queryValue := fileScanner.Text()
+	for fileScanner.Scan() {
+		bufferString := fileScanner.Text()
+		if strings.TrimSpace(bufferString) != "" {
+			queryValue = queryValue + " " + bufferString
+		} else {
+			return queryValue
+		}
+	}
+	return queryValue
 }
