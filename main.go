@@ -6,15 +6,15 @@ import (
 )
 
 func main() {
+	qb := query.NewQueryCatalog().Escape(template.HTMLEscapeString).Comment("--").LoadFile("test.sql")
 
-	qb := query.LoadFile("test.sql")
+	queryExecute := qb.GetSnippet("QueryTest1")
+	queryExecute.Param("id", 2599999).Param("height", 24).Get()
 
-	var query = qb.GetSnippet("QueryTest1")
-	query.Escape(template.HTMLEscapeString).Param("id", 25).Param("height", 1.78).Get()
+	queryExecute = qb.GetSnippet("QueryTest2")
+	queryExecute.Param("id", 25.20).Param("lastName", "JC").Get()
 
-	query = qb.GetSnippet("QueryTest2")
-	query.Escape(template.HTMLEscapeString).Param("id", 25).Param("lastName", "JC").Get()
-
-	query = qb.GetSnippet("PrologQueryTest2")
-	query.Escape(template.HTMLEscapeString).Param("feature", "CreationUser").Get()
+	qb = query.NewQueryCatalog().Escape(template.HTMLEscapeString).Comment("%%").LoadFile("test.pl")
+	queryExecute = qb.GetSnippet("PrologQueryTest2")
+	queryExecute.Param("feature", "Parametro").Get()
 }

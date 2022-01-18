@@ -7,44 +7,57 @@ import (
 	"strings"
 )
 
-const PrefixComment = "--"
 const PrefixNameQuery = "name:"
-const PrefixVar = "var:"
-const PrefixVarType = "var_type:"
-const PrefixVarValue = "var_value:"
 const VarTypeDefault = "string"
 
 type QueryCatalog struct {
 	fileNameQuerys string
 	querys         map[string]Query
+	functionEscape func(string) string
+	comment        string
 }
 
-func LoadFile(nameFile string) *QueryCatalog {
-	var queryBase = &QueryCatalog{fileNameQuerys: nameFile}
-	var queryCatalog, err = queryBase.createQuerys(nameFile)
+func NewQueryCatalog() *QueryCatalog {
+	return &QueryCatalog{}
+}
+
+func (q *QueryCatalog) Escape(FunctionEscape func(string) string) *QueryCatalog {
+	q.functionEscape = FunctionEscape
+	return q
+}
+
+func (q *QueryCatalog) Comment(comment string) *QueryCatalog {
+	q.comment = comment
+	return q
+}
+
+func (q *QueryCatalog) LoadFile(nameFile string) *QueryCatalog {
+	q.fileNameQuerys = nameFile
+	var queryCatalog, err = q.createQuerys(nameFile)
 	if err != nil {
 		panic("Error loading file initialization")
 	}
-	queryBase.querys = queryCatalog
-	return queryBase
+	q.querys = queryCatalog
+	return q
 }
 
-func (b QueryCatalog) GetSnippet(queryName string) Query {
-	return b.querys[queryName]
+func (q *QueryCatalog) GetSnippet(queryName string) Query {
+	return q.querys[queryName]
 }
 
-func (b QueryCatalog) createParametersQuery(fileScanner *bufio.Scanner) map[string]QueryParam {
+func (q *QueryCatalog) createParametersQuery(fileScanner *bufio.Scanner) map[string]QueryParam {
 	var parameters = make(map[string]QueryParam)
 	for fileScanner.Scan() {
 		bufferString := fileScanner.Text()
-		if strings.HasPrefix(bufferString, PrefixComment) {
-			nameParam := b.getNameParam(bufferString)
+		if strings.HasPrefix(bufferString, q.comment) {
+			param := bufferString[strings.Index(bufferString, ":")+1 : len(bufferString)]
+			nameParam := q.getNameParam(param)
 			if nameParam == "" {
 				continue
 			}
 			parameters[nameParam] = QueryParam{
-				TypeParam: b.getTypeParam(bufferString),
-				Value:     b.getValueInitParam(bufferString),
+				TypeParam: q.getTypeParam(param),
+				Value:     q.getValueInitParam(param),
 			}
 		} else {
 			return parameters
@@ -53,34 +66,39 @@ func (b QueryCatalog) createParametersQuery(fileScanner *bufio.Scanner) map[stri
 	return parameters
 
 }
+func (q *QueryCatalog) getNameParam(bufferString string) string {
+	indexTypeParam := strings.Index(bufferString, ":")
+	if indexTypeParam > 0 {
+		return bufferString[0:indexTypeParam]
+	}
+	indexEqual := strings.Index(bufferString, "=")
+	if indexEqual > 0 {
+		return bufferString[0:indexEqual]
+	}
+	return bufferString
 
-func (b QueryCatalog) getNameParam(bufferString string) string {
-	if !strings.Contains(bufferString, PrefixVar) {
+}
+
+func (q *QueryCatalog) getValueInitParam(bufferString string) string {
+	if !strings.Contains(bufferString, "=") {
 		return ""
 	}
-	return strings.Split(strings.Split(bufferString, PrefixVar)[1], ",")[0]
+	return bufferString[strings.Index(bufferString, "=")+1 : len(bufferString)]
 }
 
-func (b QueryCatalog) getValueInitParam(bufferString string) string {
-	if !strings.Contains(bufferString, PrefixVarValue) {
-		return ""
-	}
-	return strings.Split(strings.Split(bufferString, PrefixVarValue)[1], ",")[0]
-}
-
-func (b QueryCatalog) getTypeParam(bufferString string) string {
-	if !strings.Contains(bufferString, PrefixVarType) {
+func (q *QueryCatalog) getTypeParam(bufferString string) string {
+	if !strings.Contains(bufferString, ":") {
 		return VarTypeDefault
 	}
-	var value = strings.Split(strings.Split(bufferString, PrefixVarType)[1], ",")[0]
-	if value == "" {
-		return VarTypeDefault
+	if !strings.Contains(bufferString, "=") {
+		return q.convertionType(bufferString[strings.Index(bufferString, ":")+1 : len(bufferString)])
 	}
-	return value
+	return q.convertionType(bufferString[strings.Index(bufferString, ":")+1 : strings.Index(bufferString, "=")])
+
 }
 
-func (b QueryCatalog) createQuerys(file string) (map[string]Query, error) {
-	var querys = make(map[string]Query)
+func (q *QueryCatalog) createQuerys(file string) (map[string]Query, error) {
+	querys := make(map[string]Query)
 	readFile, err := os.Open(file)
 	if err != nil {
 		log.Fatal(err)
@@ -90,15 +108,15 @@ func (b QueryCatalog) createQuerys(file string) (map[string]Query, error) {
 	fileScanner.Split(bufio.ScanLines)
 	for fileScanner.Scan() {
 		bufferString := fileScanner.Text()
-		if strings.HasPrefix(bufferString, PrefixComment) && strings.Contains(bufferString, PrefixNameQuery) {
-			var nameQuery = strings.TrimSpace(strings.Split(bufferString, PrefixNameQuery)[1])
-			var parameters map[string]QueryParam
-			parameters = b.createParametersQuery(fileScanner)
-			queryValue := b.getQueryValue(fileScanner)
+		if strings.HasPrefix(bufferString, q.comment) && strings.Contains(bufferString, PrefixNameQuery) {
+			nameQuery := strings.TrimSpace(strings.Split(bufferString, PrefixNameQuery)[1])
+			parameters := q.createParametersQuery(fileScanner)
+			queryValue := q.getQueryValue(fileScanner)
 			querys[nameQuery] = Query{
-				Name:       nameQuery,
-				Value:      queryValue,
-				Parameters: parameters,
+				Name:           nameQuery,
+				Value:          queryValue,
+				Parameters:     parameters,
+				FunctionEscape: q.functionEscape,
 			}
 		}
 	}
@@ -107,7 +125,7 @@ func (b QueryCatalog) createQuerys(file string) (map[string]Query, error) {
 
 }
 
-func (b QueryCatalog) getQueryValue(fileScanner *bufio.Scanner) string {
+func (q *QueryCatalog) getQueryValue(fileScanner *bufio.Scanner) string {
 	queryValue := fileScanner.Text()
 	for fileScanner.Scan() {
 		bufferString := fileScanner.Text()
@@ -117,4 +135,11 @@ func (b QueryCatalog) getQueryValue(fileScanner *bufio.Scanner) string {
 		queryValue += " " + bufferString
 	}
 	return queryValue
+}
+
+func (q *QueryCatalog) convertionType(typeParam string) string {
+	if strings.HasPrefix(typeParam, "float") {
+		return "float64"
+	}
+	return typeParam
 }

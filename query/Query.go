@@ -1,7 +1,6 @@
 package query
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -12,7 +11,6 @@ type Query struct {
 	Value          string
 	FunctionEscape func(string) string
 	Parameters     map[string]QueryParam
-	err            error
 }
 
 type QueryParam struct {
@@ -20,25 +18,25 @@ type QueryParam struct {
 	Value     string
 }
 
+const NumberType = "number"
+const PrefixFloat = "float"
+const PrefixInt = "int"
+const PrefixUint = "uint"
+
 func (q *Query) Escape(FunctionEscape func(string) string) *Query {
 	q.FunctionEscape = FunctionEscape
 	return q
 }
 
 func (q *Query) Param(nameParam string, valueParam interface{}) *Query {
-	if q.err != nil {
-		return q
-	}
-
 	if valueParam == nil {
-		q.err = errors.New("valueParam must not be null")
-		return q
+		panic("valueParam must not be null")
 	}
 	param := q.Parameters[nameParam]
-	var typeParam = reflect.TypeOf(valueParam).Name()
-	if typeParam != param.TypeParam {
-		q.err = errors.New("Type invalid for parameter " + nameParam)
-		return q
+	typeParam := reflect.TypeOf(valueParam).Name()
+
+	if !q.validateTypeValue(param, typeParam) {
+		panic("Type invalid for parameter " + nameParam)
 	}
 	param.Value = fmt.Sprint(valueParam)
 	if q.FunctionEscape != nil {
@@ -48,16 +46,24 @@ func (q *Query) Param(nameParam string, valueParam interface{}) *Query {
 	return q
 }
 
+func (q *Query) validateTypeValue(param QueryParam, typeParam string) bool {
+	if q.validateNumber(param, typeParam) {
+		return true
+	}
+	return typeParam == param.TypeParam
+}
+
+func (q *Query) validateNumber(param QueryParam, typeParam string) bool {
+	return param.TypeParam == NumberType && (strings.HasPrefix(typeParam, PrefixFloat) || strings.HasPrefix(typeParam, PrefixInt) || strings.HasPrefix(typeParam, PrefixUint))
+}
+
 func (q *Query) formatParameter(value string) string {
 	return "${{" + value + "}}"
 }
 
 func (q *Query) Get() error {
-	if q.err != nil {
-		fmt.Println(q.err)
-		return q.err
-	}
-	var queryValue = q.Value
+
+	queryValue := q.Value
 	for key, param := range q.Parameters {
 		queryValue = strings.ReplaceAll(queryValue, q.formatParameter(key), param.Value)
 	}
