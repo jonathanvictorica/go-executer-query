@@ -20,9 +20,18 @@ func main() {
 
 	consist := bloom.NewConcise()
 
+	consist.Add(64)
+	consist.Add(0)
+	consist.Add(64)
 	consist.Add(12)
 	consist.Add(13)
 
-	isContains := consist.Contains(13)
-	fmt.Sprint(isContains)
+	isContains := consist.Contains(64)
+	fmt.Println(isContains)
+
+	isContains = consist.Contains(0)
+	fmt.Println(isContains)
+
+	isContains = consist.Contains(128)
+	fmt.Println(isContains)
 }
