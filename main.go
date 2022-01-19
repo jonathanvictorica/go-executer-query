@@ -1,6 +1,9 @@
 package main
 
-import "executerSQL/bloom"
+import (
+	"executerSQL/bloom"
+	"fmt"
+)
 
 func main() {
 	//qb := query.NewQueryCatalog().Escape(template.HTMLEscapeString).Comment("--").LoadFile("test.sql")
@@ -17,5 +20,9 @@ func main() {
 
 	consist := bloom.NewConcise()
 
-	consist.Add(10)
+	consist.Add(12)
+	consist.Add(13)
+
+	isContains := consist.Contains(13)
+	fmt.Sprint(isContains)
 }
